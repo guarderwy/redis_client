@@ -1,14 +1,24 @@
 import json
 import os
+import sys
 from typing import List, Optional
 from src.models.connection import ConnectionConfig
 
 
 class ConfigManager:
-    CONFIG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "config")
-    CONFIG_FILE = os.path.join(CONFIG_DIR, "connections.json")
+    @staticmethod
+    def _get_base_dir():
+        if getattr(sys, 'frozen', False):
+            return os.path.dirname(sys.executable)
+        return os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+
+    CONFIG_DIR = None
+    CONFIG_FILE = None
 
     def __init__(self):
+        base_dir = self._get_base_dir()
+        self.CONFIG_DIR = os.path.join(base_dir, "config")
+        self.CONFIG_FILE = os.path.join(self.CONFIG_DIR, "connections.json")
         os.makedirs(self.CONFIG_DIR, exist_ok=True)
         self._connections: List[ConnectionConfig] = []
         self._load_config()

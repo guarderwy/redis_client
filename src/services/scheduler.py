@@ -1,5 +1,6 @@
 import json
 import os
+import sys
 from typing import List, Callable, Optional
 from datetime import datetime
 from PyQt5.QtCore import QTimer, QObject
@@ -17,14 +18,18 @@ class ScheduledTask:
 
 
 class SchedulerService(QObject):
-    SCHEDULE_FILE = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
-        "config",
-        "scheduled_tasks.json"
-    )
+    @staticmethod
+    def _get_base_dir():
+        if getattr(sys, 'frozen', False):
+            return os.path.dirname(sys.executable)
+        return os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+
+    SCHEDULE_FILE = None
 
     def __init__(self):
         super().__init__()
+        base_dir = self._get_base_dir()
+        self.SCHEDULE_FILE = os.path.join(base_dir, "config", "scheduled_tasks.json")
         self.tasks: List[ScheduledTask] = []
         self.timer = QTimer()
         self.timer.timeout.connect(self.check_tasks)

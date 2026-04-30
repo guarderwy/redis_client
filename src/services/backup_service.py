@@ -1,16 +1,21 @@
 import json
 import os
+import sys
 from datetime import datetime
 from typing import List, Optional
 from src.core.redis_manager import RedisManager
 
 
 class BackupService:
+    @staticmethod
+    def _get_base_dir():
+        if getattr(sys, 'frozen', False):
+            return os.path.dirname(sys.executable)
+        return os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+
     def __init__(self):
-        self.backup_dir = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
-            "backups"
-        )
+        base_dir = self._get_base_dir()
+        self.backup_dir = os.path.join(base_dir, "backups")
         os.makedirs(self.backup_dir, exist_ok=True)
 
     def create_backup(self, redis_manager: RedisManager, pattern: str = "*") -> Optional[str]:
