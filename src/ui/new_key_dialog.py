@@ -1,7 +1,7 @@
 from PyQt5.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QFormLayout,
     QLineEdit, QPushButton, QLabel, QComboBox,
-    QTextEdit, QMessageBox, QDialogButtonBox, QGroupBox, QTabWidget, QWidget
+    QTextEdit, QMessageBox, QDialogButtonBox, QGroupBox, QTabWidget, QWidget, QSpinBox, QCheckBox
 )
 from PyQt5.QtCore import Qt
 from src.core.redis_manager import RedisManager
@@ -37,6 +37,31 @@ class NewKeyDialog(QDialog):
         self.key_type_combo.addItem("Zset")
         self.key_type_combo.currentIndexChanged.connect(self.on_combo_type_changed)
         form_layout.addRow("类型:", self.key_type_combo)
+
+        ttl_layout = QHBoxLayout()
+        self.ttl_checkbox = QCheckBox("设置过期时间")
+        self.ttl_checkbox.setChecked(False)
+        self.ttl_checkbox.stateChanged.connect(self.on_ttl_checkbox_changed)
+        ttl_layout.addWidget(self.ttl_checkbox)
+
+        self.ttl_value_spinbox = QSpinBox()
+        self.ttl_value_spinbox.setRange(1, 999999)
+        self.ttl_value_spinbox.setValue(60)
+        self.ttl_value_spinbox.setEnabled(False)
+        self.ttl_value_spinbox.setFixedWidth(100)
+        ttl_layout.addWidget(self.ttl_value_spinbox)
+
+        self.ttl_unit_combo = QComboBox()
+        self.ttl_unit_combo.addItem("秒")
+        self.ttl_unit_combo.addItem("分钟")
+        self.ttl_unit_combo.addItem("小时")
+        self.ttl_unit_combo.addItem("天")
+        self.ttl_unit_combo.setEnabled(False)
+        self.ttl_unit_combo.setFixedWidth(80)
+        ttl_layout.addWidget(self.ttl_unit_combo)
+
+        ttl_layout.addStretch()
+        form_layout.addRow("TTL:", ttl_layout)
 
         form_group.setLayout(form_layout)
         layout.addWidget(form_group)
@@ -118,6 +143,11 @@ class NewKeyDialog(QDialog):
         }
         self.tabs.setCurrentIndex(tab_map.get(type_name, 0))
 
+    def on_ttl_checkbox_changed(self, state):
+        enabled = state == Qt.Checked
+        self.ttl_value_spinbox.setEnabled(enabled)
+        self.ttl_unit_combo.setEnabled(enabled)
+
     def on_tab_changed(self, index):
         type_map = {
             0: "String",
@@ -151,11 +181,24 @@ class NewKeyDialog(QDialog):
         elif key_type == "zset":
             value = self.zset_value_edit.toPlainText()
         
-        return key_name, key_type, value
+        ttl = 0
+        if self.ttl_checkbox.isChecked():
+            ttl_value = self.ttl_value_spinbox.value()
+            unit = self.ttl_unit_combo.currentText()
+            if unit == "秒":
+                ttl = ttl_value
+            elif unit == "分钟":
+                ttl = ttl_value * 60
+            elif unit == "小时":
+                ttl = ttl_value * 3600
+            elif unit == "天":
+                ttl = ttl_value * 86400
+        
+        return key_name, key_type, value, ttl
 
     def validate_data(self):
         import json
-        key_name, key_type, value = self.get_key_data()
+        key_name, key_type, value, ttl = self.get_key_data()
         
         if not key_name:
             QMessageBox.warning(self, "验证失败", "键名不能为空")
