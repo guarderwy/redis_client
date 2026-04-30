@@ -67,42 +67,19 @@ class DataFormatter:
             return str(value)
 
         elif key_type == "set":
-            if isinstance(value, (set, list)):
-                return json.dumps(sorted(value, key=str), indent=2, ensure_ascii=False)
+            if isinstance(value, set):
+                return json.dumps(sorted(list(value)), indent=2, ensure_ascii=False)
             return str(value)
 
         elif key_type == "zset":
-            if isinstance(value, dict):
-                return json.dumps(value, indent=2, ensure_ascii=False)
             if isinstance(value, list):
-                result = {}
+                mapping = {}
                 for member, score in value:
-                    result[member] = score
-                return json.dumps(result, indent=2, ensure_ascii=False)
+                    mapping[member] = score
+                return json.dumps(mapping, indent=2, ensure_ascii=False)
             return str(value)
 
         return str(value)
-
-    @staticmethod
-    def parse_value_for_save(value: str, key_type: str) -> Any:
-        """解析编辑后的值，转换为可保存的格式"""
-        if key_type == "string":
-            return value
-
-        elif key_type == "hash":
-            return json.loads(value)
-
-        elif key_type == "list":
-            return json.loads(value)
-
-        elif key_type == "set":
-            return json.loads(value)
-
-        elif key_type == "zset":
-            data = json.loads(value)
-            return {k: float(v) for k, v in data.items()}
-
-        return value
 
     @staticmethod
     def format_bytes(num_bytes: int) -> str:
@@ -115,19 +92,50 @@ class DataFormatter:
     @staticmethod
     def format_ttl(ttl: int) -> str:
         if ttl == -1:
-            return "永不过期"
+            return "No expiry"
         if ttl == -2:
-            return "已过期"
+            return "Expired"
         if ttl < 60:
-            return f"{ttl}秒"
+            return f"{ttl}s"
         if ttl < 3600:
             minutes = ttl // 60
             seconds = ttl % 60
-            return f"{minutes}分 {seconds}秒"
+            return f"{minutes}m {seconds}s"
         if ttl < 86400:
             hours = ttl // 3600
             minutes = (ttl % 3600) // 60
-            return f"{hours}小时 {minutes}分"
+            return f"{hours}h {minutes}m"
         days = ttl // 86400
         hours = (ttl % 86400) // 3600
-        return f"{days}天 {hours}小时"
+        return f"{days}d {hours}h"
+
+    @staticmethod
+    def parse_value_for_save(value: str, key_type: str) -> Any:
+        if key_type == "string":
+            return value
+
+        elif key_type == "hash":
+            data = json.loads(value)
+            if not isinstance(data, dict):
+                raise ValueError("Hash value must be JSON object format")
+            return {k: str(v) for k, v in data.items()}
+
+        elif key_type == "list":
+            data = json.loads(value)
+            if not isinstance(data, list):
+                raise ValueError("List value must be JSON array format")
+            return [str(item) for item in data]
+
+        elif key_type == "set":
+            data = json.loads(value)
+            if not isinstance(data, list):
+                raise ValueError("Set value must be JSON array format")
+            return set(str(item) for item in data)
+
+        elif key_type == "zset":
+            data = json.loads(value)
+            if not isinstance(data, dict):
+                raise ValueError("Zset value must be JSON object format")
+            return {k: float(v) for k, v in data.items()}
+
+        return value

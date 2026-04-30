@@ -26,30 +26,44 @@ class DataValidator:
             return True, "Valid"
 
         elif key_type == "hash":
-            if not isinstance(value, dict):
-                return False, "Hash value must be a dictionary"
-            return True, "Valid"
+            try:
+                data = json.loads(value) if isinstance(value, str) else value
+                if not isinstance(data, dict):
+                    return False, "Hash value must be JSON object format"
+                return True, "Valid"
+            except json.JSONDecodeError as e:
+                return False, f"Invalid JSON format: {str(e)}"
 
         elif key_type == "list":
-            if not isinstance(value, list):
-                return False, "List value must be a list"
-            return True, "Valid"
+            try:
+                data = json.loads(value) if isinstance(value, str) else value
+                if not isinstance(data, list):
+                    return False, "List value must be JSON array format"
+                return True, "Valid"
+            except json.JSONDecodeError as e:
+                return False, f"Invalid JSON format: {str(e)}"
 
         elif key_type == "set":
-            if not isinstance(value, (list, set)):
-                return False, "Set value must be a list or set"
-            return True, "Valid"
+            try:
+                data = json.loads(value) if isinstance(value, str) else value
+                if not isinstance(data, list):
+                    return False, "Set value must be JSON array format"
+                return True, "Valid"
+            except json.JSONDecodeError as e:
+                return False, f"Invalid JSON format: {str(e)}"
 
         elif key_type == "zset":
-            if not isinstance(value, list):
-                return False, "Sorted set value must be a list of (member, score) tuples"
-            for item in value:
-                if not isinstance(item, (list, tuple)) or len(item) != 2:
-                    return False, "Each item must be a (member, score) tuple"
-                try:
-                    float(item[1])
-                except (ValueError, TypeError):
-                    return False, "Score must be a number"
-            return True, "Valid"
+            try:
+                data = json.loads(value) if isinstance(value, str) else value
+                if not isinstance(data, dict):
+                    return False, "Zset value must be JSON object format (member: score)"
+                for member, score in data.items():
+                    try:
+                        float(score)
+                    except (ValueError, TypeError):
+                        return False, f"Score for member '{member}' must be a number"
+                return True, "Valid"
+            except json.JSONDecodeError as e:
+                return False, f"Invalid JSON format: {str(e)}"
 
         return False, f"Unknown key type: {key_type}"

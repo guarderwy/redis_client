@@ -1,6 +1,6 @@
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QSplitter,
-    QTreeWidget, QTreeWidgetItem, QTableWidget,
+    QTreeWidget, QTreeWidgetItem, QTreeWidgetItemIterator, QTableWidget,
     QTableWidgetItem, QHeaderView, QLineEdit, QLabel,
     QPushButton, QComboBox, QGroupBox, QTextEdit,
     QMessageBox, QMenu, QAction, QProgressBar,
@@ -53,6 +53,7 @@ class MainWindow(QWidget):
         self.current_pattern = "*"
         self.command_history: list[CommandHistory] = []
         self.operation_log: list[str] = []
+        self.pending_select_key: str = None
         self.init_ui()
         self.load_connections()
         self.setup_shortcuts()
@@ -191,6 +192,38 @@ class MainWindow(QWidget):
         self.key_tree.itemClicked.connect(self.on_key_selected)
         self.key_tree.setContextMenuPolicy(Qt.CustomContextMenu)
         self.key_tree.customContextMenuRequested.connect(self.show_key_context_menu)
+        self.key_tree.setStyleSheet("""
+            QTreeWidget {
+                font-size: 12px;
+                border: 1px solid #D0D5DD;
+                border-radius: 4px;
+                background-color: #FFFFFF;
+            }
+            QTreeWidget::item {
+                padding: 3px 4px;
+                border-bottom: 1px solid #F5F5F5;
+            }
+            QTreeWidget::item:selected {
+                background-color: #D6E4F0;
+                color: #1A1A1A;
+                border-radius: 4px;
+            }
+            QTreeWidget::item:hover {
+                background-color: #EEF2F7;
+                border-radius: 4px;
+            }
+            QTreeWidget::branch {
+                background: transparent;
+            }
+            QHeaderView::section {
+                background-color: #E8EBF0;
+                color: #333333;
+                padding: 5px 4px;
+                border: none;
+                border-bottom: 1px solid #D0D5DD;
+                font-size: 12px;
+            }
+        """)
         layout.addWidget(self.key_tree)
 
         pagination_layout = QHBoxLayout()
@@ -227,12 +260,15 @@ class MainWindow(QWidget):
 
         info_layout = QHBoxLayout()
         self.key_name_label = QLabel("键名: ")
+        self.key_name_label.setFont(QFont("Microsoft YaHei", 12, QFont.Bold))
         info_layout.addWidget(self.key_name_label)
 
         self.key_type_label = QLabel("类型: ")
+        self.key_type_label.setFont(QFont("Microsoft YaHei", 12, QFont.Bold))
         info_layout.addWidget(self.key_type_label)
 
         self.ttl_label = QLabel("TTL: ")
+        self.ttl_label.setFont(QFont("Microsoft YaHei", 12, QFont.Bold))
         info_layout.addWidget(self.ttl_label)
 
         info_layout.addStretch()
@@ -360,13 +396,23 @@ class MainWindow(QWidget):
             gridline-color: #E8EBF0;
             alternate-background-color: #F9FAFB;
             font-size: 14px;
+            outline: none;
         }
-        QTreeWidget::item:selected, QTableWidget::item:selected {
+        QTreeWidget::item {
+            padding: 4px 2px;
+            border-bottom: 1px solid #F0F0F0;
+        }
+        QTreeWidget::item:selected {
             background-color: #D6E4F0;
             color: #333333;
+            border-radius: 3px;
         }
-        QTreeWidget::item:hover, QTableWidget::item:hover {
+        QTreeWidget::item:hover {
             background-color: #E8EBF0;
+            border-radius: 3px;
+        }
+        QTreeWidget::branch {
+            background: transparent;
         }
         QHeaderView::section {
             background-color: #E8EBF0;
@@ -908,17 +954,17 @@ class MainWindow(QWidget):
         self.load_keys_thread.start()
 
     def on_keys_loaded(self, keys: list[KeyInfo], total: int):
-        # Sort keys alphabetically by default
         sorted_keys = sorted(keys, key=lambda k: k.key)
         
-        # Build hierarchical tree structure for keys with colons
         root_items = {}
+        
+        folder_icon = self.create_folder_icon()
+        key_icon = self.create_key_icon()
         
         for key_info in sorted_keys:
             parts = key_info.key.split(':')
             
             if len(parts) > 1:
-                # Key has colons, create hierarchical structure
                 current_path = ""
                 parent_item = None
                 
@@ -927,7 +973,9 @@ class MainWindow(QWidget):
                     
                     if current_path not in root_items:
                         folder_item = QTreeWidgetItem([part, "FOLDER", ""])
+                        folder_item.setIcon(0, folder_icon)
                         folder_item.setForeground(1, QColor("#808080"))
+                        folder_item.setFont(0, QFont("Microsoft YaHei", 11))
                         
                         if parent_item:
                             parent_item.addChild(folder_item)
@@ -939,13 +987,14 @@ class MainWindow(QWidget):
                     else:
                         parent_item = root_items[current_path]
                 
-                # Add the actual key as a child of the last folder
                 key_item = QTreeWidgetItem([
                     parts[-1],
                     key_info.key_type.upper(),
                     DataFormatter.format_ttl(key_info.ttl)
                 ])
+                key_item.setIcon(0, key_icon)
                 key_item.setData(0, Qt.UserRole, key_info.key)
+                key_item.setFont(0, QFont("Consolas", 11))
                 
                 type_colors = {
                     "string": "#4ec9b0",
@@ -962,13 +1011,14 @@ class MainWindow(QWidget):
                 else:
                     self.key_tree.addTopLevelItem(key_item)
             else:
-                # Key without colons, add as top-level item
                 item = QTreeWidgetItem([
                     key_info.key,
                     key_info.key_type.upper(),
                     DataFormatter.format_ttl(key_info.ttl)
                 ])
+                item.setIcon(0, key_icon)
                 item.setData(0, Qt.UserRole, key_info.key)
+                item.setFont(0, QFont("Consolas", 11))
                 
                 type_colors = {
                     "string": "#4ec9b0",
@@ -982,7 +1032,6 @@ class MainWindow(QWidget):
                 
                 self.key_tree.addTopLevelItem(item)
         
-        # Expand all folder items by default
         for i in range(self.key_tree.topLevelItemCount()):
             item = self.key_tree.topLevelItem(i)
             if item.childCount() > 0 and item.text(1) == "FOLDER":
@@ -990,6 +1039,38 @@ class MainWindow(QWidget):
 
         self.total_label.setText(f"总计: {total}")
         self.page_label.setText(f"第 {self.current_page + 1} 页")
+
+        # If there's a pending key to select, select it now
+        if self.pending_select_key:
+            self.select_key_in_tree(self.pending_select_key)
+            self.pending_select_key = None
+
+    def create_folder_icon(self):
+        pixmap = QPixmap(16, 16)
+        pixmap.fill(Qt.transparent)
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setBrush(QColor("#F0C040"))
+        painter.setPen(QColor("#D4A020"))
+        painter.drawRoundedRect(1, 4, 14, 10, 2, 2)
+        painter.setBrush(QColor("#F0C040"))
+        painter.drawRoundedRect(1, 2, 6, 4, 2, 2)
+        painter.end()
+        return QIcon(pixmap)
+
+    def create_key_icon(self):
+        pixmap = QPixmap(16, 16)
+        pixmap.fill(Qt.transparent)
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setBrush(QColor("#4A90D9"))
+        painter.setPen(QColor("#3A70B0"))
+        painter.drawEllipse(2, 2, 12, 12)
+        painter.setPen(QColor("#FFFFFF"))
+        painter.setBrush(Qt.NoBrush)
+        painter.drawEllipse(5, 5, 6, 6)
+        painter.end()
+        return QIcon(pixmap)
 
     def search_keys(self):
         self.current_page = 0
@@ -1084,13 +1165,13 @@ class MainWindow(QWidget):
 
         dialog = NewKeyDialog(self, self.redis_manager)
         if dialog.exec_():
-            key_name, key_type, value = dialog.get_key_data()
+            key_name, key_type, value, ttl = dialog.get_key_data()
             
             try:
                 import json
                 success = False
                 if key_type == "string":
-                    success = self.redis_manager.client.set(key_name, value)
+                    success = self.redis_manager.client.set(key_name, value, ex=ttl if ttl > 0 else None)
                 elif key_type == "hash":
                     data = json.loads(value)
                     success = self.redis_manager.client.hset(key_name, mapping=data)
@@ -1111,6 +1192,10 @@ class MainWindow(QWidget):
                     mapping = {k: float(v) for k, v in mapping.items()}
                     success = self.redis_manager.client.zadd(key_name, mapping)
                 
+                # 对于非 String 类型，单独设置 TTL
+                if success and key_type != "string" and ttl > 0:
+                    self.redis_manager.client.expire(key_name, ttl)
+                
                 if success:
                     QMessageBox.information(self, "成功", f"键 '{key_name}' 创建成功")
                     cmd_map = {
@@ -1122,10 +1207,11 @@ class MainWindow(QWidget):
                     }
                     cmd = cmd_map.get(key_type, "SET")
                     display_value = value[:50] + "..." if len(value) > 50 else value
-                    self.add_operation_log(f"{cmd} {key_name} {display_value}")
+                    ttl_info = f" EX {ttl}" if ttl > 0 else ""
+                    self.add_operation_log(f"{cmd} {key_name} {display_value}{ttl_info}")
+                    # Set pending key to select after refresh completes
+                    self.pending_select_key = key_name
                     self.refresh_keys()
-                    # Select the newly created key
-                    self.select_key_in_tree(key_name)
                 else:
                     QMessageBox.critical(self, "错误", "创建键失败")
             except Exception as e:
@@ -1237,10 +1323,9 @@ class MainWindow(QWidget):
             if new_key and new_key != old_key:
                 if self.redis_manager.rename_key(old_key, new_key):
                     self.add_operation_log(f"RENAME {old_key} {new_key}")
-                    # Refresh the selected key if it was the renamed one
+                    # Set pending key to select after refresh completes
+                    self.pending_select_key = new_key
                     self.refresh_keys()
-                    # Select the new key in the tree
-                    self.select_key_in_tree(new_key)
                 else:
                     QMessageBox.critical(self, "错误", "重命名键失败")
 
@@ -1313,7 +1398,7 @@ class MainWindow(QWidget):
                     "zset": "ZADD"
                 }
                 cmd = cmd_map.get(key_type, "SET")
-                display_value = value[:50] + "..." if len(value) > 50 else value
+                display_value = value[:120] + "..." if len(value) > 120 else value
                 self.add_operation_log(f"{cmd} {key} {display_value}")
                 self.refresh_selected_key()
             else:

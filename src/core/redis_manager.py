@@ -138,28 +138,25 @@ class RedisManager:
             elif key_type == "hash":
                 self._client.delete(key)
                 if isinstance(value, dict):
-                    self._client.hset(key, mapping=value)
+                    self._client.hset(key, mapping={k: str(v) for k, v in value.items()})
             elif key_type == "list":
                 self._client.delete(key)
                 if isinstance(value, list):
-                    self._client.rpush(key, *value)
+                    self._client.rpush(key, *[str(v) for v in value])
             elif key_type == "set":
                 self._client.delete(key)
                 if isinstance(value, (list, set)):
-                    self._client.sadd(key, *value)
+                    self._client.sadd(key, *[str(v) for v in value])
             elif key_type == "zset":
                 self._client.delete(key)
                 if isinstance(value, dict):
-                    self._client.zadd(key, value)
-                elif isinstance(value, list):
-                    self._client.zadd(key, {member: score for member, score in value})
+                    self._client.zadd(key, {k: float(v) for k, v in value.items()})
 
             if ttl > 0:
                 self._client.expire(key, ttl)
 
             return True
-        except Exception as e:
-            print(f"Error setting key value: {e}")
+        except Exception:
             return False
 
     def delete_key(self, key: str) -> bool:
