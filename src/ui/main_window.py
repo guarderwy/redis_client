@@ -227,16 +227,16 @@ class MainWindow(QWidget):
         layout.addWidget(self.key_tree)
 
         pagination_layout = QHBoxLayout()
-        btn_prev = QPushButton("上一页")
-        btn_prev.clicked.connect(self.prev_page)
-        pagination_layout.addWidget(btn_prev)
+        self.btn_prev = QPushButton("上一页")
+        self.btn_prev.clicked.connect(self.prev_page)
+        pagination_layout.addWidget(self.btn_prev)
 
         self.page_label = QLabel("第 1 页")
         pagination_layout.addWidget(self.page_label)
 
-        btn_next = QPushButton("下一页")
-        btn_next.clicked.connect(self.next_page)
-        pagination_layout.addWidget(btn_next)
+        self.btn_next = QPushButton("下一页")
+        self.btn_next.clicked.connect(self.next_page)
+        pagination_layout.addWidget(self.btn_next)
 
         pagination_layout.addStretch()
         pagination_layout.addWidget(QLabel("每页:"))
@@ -1040,6 +1040,11 @@ class MainWindow(QWidget):
         self.total_label.setText(f"总计: {total}")
         self.page_label.setText(f"第 {self.current_page + 1} 页")
 
+        # Update pagination buttons state
+        self.btn_prev.setEnabled(self.current_page > 0)
+        has_more = total > (self.current_page + 1) * self.page_size
+        self.btn_next.setEnabled(has_more)
+
         # If there's a pending key to select, select it now
         if self.pending_select_key:
             self.select_key_in_tree(self.pending_select_key)
@@ -1416,13 +1421,23 @@ class MainWindow(QWidget):
         if not key:
             QMessageBox.warning(self, "警告", "未选择键")
             return
+        
         ttl = self.ttl_spin.value()
-
-        if self.redis_manager.set_ttl(key, ttl):
-            self.add_operation_log(f"已设置 {key} 的 TTL")
-            self.refresh_selected_key()
+        
+        if ttl == -1:
+            if self.redis_manager.set_ttl(key, ttl):
+                self.add_operation_log(f"PERSIST {key}")
+                self.refresh_selected_key()
+            else:
+                QMessageBox.critical(self, "错误", "设置 TTL 失败")
+        elif ttl > 0:
+            if self.redis_manager.set_ttl(key, ttl):
+                self.add_operation_log(f"EXPIRE {key} {ttl}")
+                self.refresh_selected_key()
+            else:
+                QMessageBox.critical(self, "错误", "设置 TTL 失败")
         else:
-            QMessageBox.critical(self, "错误", "设置 TTL 失败")
+            QMessageBox.warning(self, "警告", "TTL 值无效")
 
     def show_key_context_menu(self, position):
         menu = QMenu()
