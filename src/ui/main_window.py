@@ -54,6 +54,7 @@ class MainWindow(QWidget):
         self.command_history: list[CommandHistory] = []
         self.operation_log: list[str] = []
         self.pending_select_key: str = None
+        self.current_key_name: str = ""
         self.init_ui()
         self.load_connections()
         self.setup_shortcuts()
@@ -150,6 +151,10 @@ class MainWindow(QWidget):
         btn_search = QPushButton("搜索")
         btn_search.clicked.connect(self.search_keys)
         search_layout.addWidget(btn_search)
+
+        btn_reset = QPushButton("重置")
+        btn_reset.clicked.connect(self.reset_filters)
+        search_layout.addWidget(btn_reset)
 
         layout.addLayout(search_layout)
 
@@ -262,6 +267,10 @@ class MainWindow(QWidget):
         self.key_name_label = QLabel("键名: ")
         self.key_name_label.setFont(QFont("Microsoft YaHei", 12, QFont.Bold))
         info_layout.addWidget(self.key_name_label)
+
+        self.btn_copy_key_name = QPushButton("复制")
+        self.btn_copy_key_name.clicked.connect(self.copy_key_name)
+        info_layout.addWidget(self.btn_copy_key_name)
 
         self.key_type_label = QLabel("类型: ")
         self.key_type_label.setFont(QFont("Microsoft YaHei", 12, QFont.Bold))
@@ -1089,6 +1098,26 @@ class MainWindow(QWidget):
             self.current_pattern = "*"
         self.refresh_keys_with_pattern()
 
+    def reset_filters(self):
+        self.search_edit.clear()
+        self.type_filter.setCurrentIndex(0)
+        self.ttl_filter.setCurrentIndex(0)
+        self.current_pattern = "*"
+        self.current_page = 0
+        self.current_key_name = ""
+        self.key_name_label.setText("键名: ")
+        self.key_type_label.setText("类型: ")
+        self.ttl_label.setText("TTL: ")
+        self.value_editor.clear()
+        self.key_tree.clear()
+        self.refresh_keys()
+
+    def copy_key_name(self):
+        if self.current_key_name:
+            clipboard = QApplication.clipboard()
+            clipboard.setText(self.current_key_name)
+            self.add_operation_log(f"COPY {self.current_key_name}")
+
     def refresh_keys_with_pattern(self):
         if not self.redis_manager.is_connected:
             return
@@ -1141,6 +1170,7 @@ class MainWindow(QWidget):
         if not kv:
             return
 
+        self.current_key_name = key
         self.key_name_label.setText(f"键名: {key}")
         self.key_type_label.setText(f"类型: {kv.key_type.upper()}")
         self.ttl_label.setText(f"TTL: {DataFormatter.format_ttl(kv.ttl)}")
