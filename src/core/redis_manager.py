@@ -47,6 +47,19 @@ class RedisManager:
         self._config = None
         self._connected = False
 
+    def select_db(self, db: int) -> Tuple[bool, str]:
+        if not self.is_connected:
+            return False, "Not connected"
+        try:
+            kwargs = self._config.get_connection_kwargs()
+            kwargs["db"] = db
+            self._client = redis.Redis(**kwargs)
+            self._client.ping()
+            self._config.db = db
+            return True, f"Switched to db{db}"
+        except Exception as e:
+            return False, f"Failed to switch db: {str(e)}"
+
     def test_connection(self, config: ConnectionConfig) -> Tuple[bool, str]:
         try:
             client = redis.Redis(**config.get_connection_kwargs())

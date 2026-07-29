@@ -45,10 +45,6 @@ class ConnectionDialog(QDialog):
         self.password_edit.setPlaceholderText("可选")
         form_layout.addRow("密码:", self.password_edit)
 
-        self.db_spin = QSpinBox()
-        self.db_spin.setRange(0, 15)
-        form_layout.addRow("数据库:", self.db_spin)
-
         self.username_edit = QLineEdit()
         self.username_edit.setPlaceholderText("可选 (Redis 6+)")
         form_layout.addRow("用户名:", self.username_edit)
@@ -105,7 +101,6 @@ class ConnectionDialog(QDialog):
         self.port_spin.setValue(self.config.port)
         if self.config.password:
             self.password_edit.setText(self.config.password)
-        self.db_spin.setValue(self.config.db)
         if self.config.username:
             self.username_edit.setText(self.config.username)
         self.separator_edit.setText(self.config.separator)
@@ -123,7 +118,6 @@ class ConnectionDialog(QDialog):
             self.config.host = self.host_edit.text() or "localhost"
             self.config.port = self.port_spin.value()
             self.config.password = self.password_edit.text() or None
-            self.config.db = self.db_spin.value()
             self.config.username = self.username_edit.text() or None
             self.config.separator = self.separator_edit.text() or ":"
             self.config.ssl = self.ssl_checkbox.isChecked()
@@ -140,7 +134,6 @@ class ConnectionDialog(QDialog):
                 host=self.host_edit.text() or "localhost",
                 port=self.port_spin.value(),
                 password=self.password_edit.text() or None,
-                db=self.db_spin.value(),
                 username=self.username_edit.text() or None,
                 separator=self.separator_edit.text() or ":",
                 ssl=self.ssl_checkbox.isChecked(),

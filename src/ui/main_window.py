@@ -99,7 +99,7 @@ class MainWindow(QWidget):
         toolbar.setToolButtonStyle(Qt.ToolButtonTextOnly)
 
         self.connection_combo = QComboBox()
-        self.connection_combo.setMinimumWidth(200)
+        self.connection_combo.setMinimumWidth(150)
         self.connection_combo.currentIndexChanged.connect(self.on_connection_changed)
         toolbar.addWidget(self.connection_combo)
 
@@ -107,6 +107,15 @@ class MainWindow(QWidget):
         self.status_indicator.setFixedSize(12, 12)
         self.status_indicator.setStyleSheet("background-color: #FF4444; border-radius: 6px;")
         toolbar.addWidget(self.status_indicator)
+
+        # 数据库下拉框
+        self.db_combo = QComboBox()
+        self.db_combo.setMinimumWidth(150)
+        self.db_combo.currentIndexChanged.connect(self.on_db_changed)
+        self.db_combo.setEnabled(False)
+        toolbar.addWidget(self.db_combo)
+
+        toolbar.addSeparator()
 
         btn_add_conn = QPushButton("添加")
         btn_add_conn.clicked.connect(self.add_connection)
@@ -776,6 +785,8 @@ class MainWindow(QWidget):
         if self.redis_manager.is_connected:
             self.redis_manager.disconnect()
             self.update_status_indicator(False)
+        self.db_combo.clear()
+        self.db_combo.setEnabled(False)
         self.key_tree.clear()
         self.value_editor.clear()
         self.key_name_label.setText("键名: ")
@@ -833,10 +844,12 @@ class MainWindow(QWidget):
         if not config:
             return
 
+        config.db = 0
         success, message = self.redis_manager.connect(config)
         if success:
             self.update_status_indicator(True)
             self.add_operation_log(f"已连接到 {config.name} ({config.host}:{config.port})")
+            self.load_databases()
             self.refresh_keys()
         else:
             QMessageBox.critical(self, "连接错误", message)
@@ -849,7 +862,60 @@ class MainWindow(QWidget):
         self.key_type_label.setText("类型: ")
         self.ttl_label.setText("TTL: ")
         self.update_status_indicator(False)
+        self.db_combo.clear()
+        self.db_combo.setEnabled(False)
         self.add_operation_log("已断开连接")
+
+    def load_databases(self):
+        if not self.redis_manager.is_connected:
+            return
+
+        self.db_combo.clear()
+        self.db_combo.blockSignals(True)
+
+        try:
+            info = self.redis_manager.client.info()
+            db_index = 0
+            while True:
+                db_key = f"db{db_index}"
+                if db_key in info:
+                    db_info = info[db_key]
+                    keys = db_info.get("keys", 0)
+                    self.db_combo.addItem(f"db{db_index} ({keys} keys)", userData=db_index)
+                    db_index += 1
+                else:
+                    break
+
+            if self.db_combo.count() > 0:
+                self.db_combo.setEnabled(True)
+                self.db_combo.setCurrentIndex(0)
+                self.add_operation_log(f"加载了 {self.db_combo.count()} 个数据库")
+            else:
+                self.db_combo.addItem("无数据库", userData=0)
+                self.db_combo.setEnabled(False)
+        except Exception as e:
+            self.add_operation_log(f"加载数据库失败: {str(e)}")
+            self.db_combo.addItem("加载失败", userData=0)
+            self.db_combo.setEnabled(False)
+
+        self.db_combo.blockSignals(False)
+
+    def on_db_changed(self, index):
+        if index < 0 or not self.redis_manager.is_connected:
+            return
+
+        db_index = self.db_combo.itemData(index)
+        if db_index is None:
+            return
+
+        success, message = self.redis_manager.select_db(db_index)
+        if success:
+            self.add_operation_log(f"已切换到数据库 db{db_index}")
+            self.current_page = 0
+            self.refresh_keys()
+        else:
+            self.add_operation_log(f"切换数据库失败: {message}")
+            QMessageBox.critical(self, "错误", f"切换数据库失败: {message}")
 
     def update_status_indicator(self, connected: bool):
         if connected:
