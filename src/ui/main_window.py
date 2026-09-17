@@ -9,7 +9,7 @@ from PyQt5.QtWidgets import (
     QMenuBar, QFileDialog, QShortcut, QDialog
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
-from PyQt5.QtGui import QIcon, QFont, QColor, QKeySequence, QPixmap, QPainter
+from PyQt5.QtGui import QIcon, QFont, QColor, QKeySequence, QPixmap, QPainter, QPen
 import time
 from src.core.redis_manager import RedisManager
 from src.core.config_manager import ConfigManager
@@ -206,7 +206,13 @@ class MainWindow(QWidget):
         self.key_tree = QTreeWidget()
         self.key_tree.setHeaderLabels(["键名", "类型", "TTL"])
         self.key_tree.setColumnWidth(0, 250)
+        self.key_tree.setColumnWidth(1, 64)
+        self.key_tree.setColumnWidth(2, 52)
+        header = self.key_tree.header()
+        header.setStretchLastSection(False)
+        header.setSectionResizeMode(QHeaderView.Interactive)
         self.key_tree.setSelectionMode(QAbstractItemView.ExtendedSelection)
+        self.key_tree.setExpandsOnDoubleClick(False)
         self.key_tree.itemClicked.connect(self.on_key_selected)
         self.key_tree.setContextMenuPolicy(Qt.CustomContextMenu)
         self.key_tree.customContextMenuRequested.connect(self.show_key_context_menu)
@@ -1061,6 +1067,59 @@ class MainWindow(QWidget):
             self.add_operation_log("已切换到数据库 db0")
         self.on_refresh_button()
 
+    def refresh_folder(self, item):
+        if not self.redis_manager.is_connected:
+            return
+        base = item.data(0, Qt.UserRole + 1)
+        if not base:
+            return
+        item.takeChildren()
+        keys = self.redis_manager.get_keys(base + "*", page=0, page_size=100000)
+        self._build_subtree(item, base, keys)
+        item.setExpanded(not item.isExpanded())
+        self.add_operation_log(f"刷新文件夹: {base}*")
+
+    def _build_subtree(self, parent, base, keys):
+        folder_icon = self.create_folder_icon()
+        key_icon = self.create_key_icon()
+        type_colors = {
+            "string": "#4ec9b0",
+            "hash": "#569cd6",
+            "list": "#dcdcaa",
+            "set": "#c586c0",
+            "zset": "#ce9178"
+        }
+        subs = {}
+        for ki in sorted(keys, key=lambda k: k.key):
+            rel = ki.key[len(base):]
+            if not rel:
+                continue
+            parts = rel.split(':')
+            cur = parent
+            for i, part in enumerate(parts[:-1]):
+                rel_prefix = ":".join(parts[:i + 1])
+                if rel_prefix not in subs:
+                    f = QTreeWidgetItem([part, "FOLDER", ""])
+                    f.setIcon(0, folder_icon)
+                    f.setData(0, Qt.UserRole + 1, base + rel_prefix + ":")
+                    f.setToolTip(0, "单击刷新该文件夹并展开/收起")
+                    f.setForeground(1, QColor("#808080"))
+                    f.setFont(0, QFont("Microsoft YaHei", 11))
+                    cur.addChild(f)
+                    subs[rel_prefix] = f
+                cur = subs[rel_prefix]
+            child = QTreeWidgetItem([
+                parts[-1],
+                ki.key_type.upper(),
+                DataFormatter.format_ttl(ki.ttl)
+            ])
+            child.setIcon(0, key_icon)
+            child.setData(0, Qt.UserRole, ki.key)
+            child.setFont(0, QFont("Consolas", 11))
+            color = type_colors.get(ki.key_type, "#333333")
+            child.setForeground(1, QColor(color))
+            cur.addChild(child)
+
     def on_keys_loaded(self, keys: list[KeyInfo], total: int):
         sorted_keys = sorted(keys, key=lambda k: k.key)
         
@@ -1082,6 +1141,8 @@ class MainWindow(QWidget):
                     if current_path not in root_items:
                         folder_item = QTreeWidgetItem([part, "FOLDER", ""])
                         folder_item.setIcon(0, folder_icon)
+                        folder_item.setData(0, Qt.UserRole + 1, ":".join(parts[:i + 1]) + ":")
+                        folder_item.setToolTip(0, "单击刷新该文件夹并展开/收起")
                         folder_item.setForeground(1, QColor("#808080"))
                         folder_item.setFont(0, QFont("Microsoft YaHei", 11))
                         
@@ -1176,12 +1237,15 @@ class MainWindow(QWidget):
         pixmap.fill(Qt.transparent)
         painter = QPainter(pixmap)
         painter.setRenderHint(QPainter.Antialiasing)
-        painter.setBrush(QColor("#4A90D9"))
-        painter.setPen(QColor("#3A70B0"))
-        painter.drawEllipse(2, 2, 12, 12)
-        painter.setPen(QColor("#FFFFFF"))
+        c = QColor("#2FB078")
+        painter.setPen(QPen(c, 2, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
         painter.setBrush(Qt.NoBrush)
-        painter.drawEllipse(5, 5, 6, 6)
+        painter.drawEllipse(2, 3, 6, 6)          # 钥匙环
+        painter.setPen(Qt.NoPen)
+        painter.setBrush(c)
+        painter.drawRect(7, 4, 6, 3)             # 钥匙杆
+        painter.drawRect(10, 7, 2, 3)            # 齿1
+        painter.drawRect(12, 7, 2, 2)            # 齿2
         painter.end()
         return QIcon(pixmap)
 
@@ -1260,6 +1324,9 @@ class MainWindow(QWidget):
         self.refresh_keys()
 
     def on_key_selected(self, item, column):
+        if item.text(1) == "FOLDER":
+            self.refresh_folder(item)
+            return
         key_name = item.data(0, Qt.UserRole)
         if key_name:
             self.load_key_value(key_name)
