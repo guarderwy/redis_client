@@ -2,7 +2,7 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QSplitter,
     QTreeWidget, QTreeWidgetItem, QTreeWidgetItemIterator, QTableWidget,
     QTableWidgetItem, QHeaderView, QLineEdit, QLabel,
-    QPushButton, QComboBox, QGroupBox, QTextEdit,
+    QPushButton, QComboBox, QGroupBox, QTextEdit, QCheckBox,
     QMessageBox, QMenu, QAction, QProgressBar,
     QToolBar, QStatusBar, QTabWidget, QSpinBox,
     QAbstractItemView, QApplication, QInputDialog,
@@ -115,6 +115,10 @@ class MainWindow(QWidget):
         self.db_combo.setEnabled(False)
         toolbar.addWidget(self.db_combo)
 
+        self.all_dbs_check = QCheckBox("所有库")
+        self.all_dbs_check.toggled.connect(self.on_all_dbs_toggled)
+        toolbar.addWidget(self.all_dbs_check)
+
         toolbar.addSeparator()
 
         btn_add_conn = QPushButton("添加")
@@ -142,7 +146,7 @@ class MainWindow(QWidget):
         toolbar.addSeparator()
 
         btn_refresh = QPushButton("刷新")
-        btn_refresh.clicked.connect(self.refresh_keys)
+        btn_refresh.clicked.connect(self.on_refresh_button)
         toolbar.addWidget(btn_refresh)
 
         return toolbar
@@ -875,20 +879,39 @@ class MainWindow(QWidget):
 
         try:
             info = self.redis_manager.client.info()
-            db_index = 0
-            while True:
-                db_key = f"db{db_index}"
-                if db_key in info:
-                    db_info = info[db_key]
-                    keys = db_info.get("keys", 0)
+            all_dbs_on = self.all_dbs_check.isChecked()
+
+            db_count = None
+            if all_dbs_on:
+                try:
+                    cfg = self.redis_manager.client.config_get("databases") or {}
+                    db_count = int(cfg.get("databases", 16))
+                except Exception:
+                    db_count = 16
+
+            if all_dbs_on:
+                for db_index in range(db_count or 0):
+                    db_info = info.get(f"db{db_index}", {})
+                    keys = db_info.get("keys", 0) if isinstance(db_info, dict) else 0
                     self.db_combo.addItem(f"db{db_index} ({keys} keys)", userData=db_index)
-                    db_index += 1
-                else:
-                    break
+            else:
+                db_indexes = []
+                for key, value in info.items():
+                    if key.startswith("db"):
+                        try:
+                            db_indexes.append(int(key[2:]))
+                        except ValueError:
+                            continue
+                for idy in sorted(db_indexes):
+                    db_info = info[f"db{idy}"]
+                    keys = db_info.get("keys", 0)
+                    self.db_combo.addItem(f"db{idy} ({keys} keys)", userData=idy)
 
             if self.db_combo.count() > 0:
                 self.db_combo.setEnabled(True)
-                self.db_combo.setCurrentIndex(0)
+                current_db = self.redis_manager.config.db if self.redis_manager.config else 0
+                idx = self.db_combo.findData(current_db)
+                self.db_combo.setCurrentIndex(idx if idx >= 0 else 0)
                 self.add_operation_log(f"加载了 {self.db_combo.count()} 个数据库")
             else:
                 self.db_combo.addItem("无数据库", userData=0)
@@ -1028,6 +1051,16 @@ class MainWindow(QWidget):
         self.load_keys_thread.finished.connect(self.on_keys_loaded)
         self.load_keys_thread.start()
 
+    def on_refresh_button(self):
+        self.load_databases()
+        self.refresh_keys()
+
+    def on_all_dbs_toggled(self, checked):
+        if not checked and self.redis_manager.is_connected and self.redis_manager.config and self.redis_manager.config.db != 0:
+            self.redis_manager.select_db(0)
+            self.add_operation_log("已切换到数据库 db0")
+        self.on_refresh_button()
+
     def on_keys_loaded(self, keys: list[KeyInfo], total: int):
         sorted_keys = sorted(keys, key=lambda k: k.key)
         
@@ -1038,7 +1071,7 @@ class MainWindow(QWidget):
         
         for key_info in sorted_keys:
             parts = key_info.key.split(':')
-            
+
             if len(parts) > 1:
                 current_path = ""
                 parent_item = None
