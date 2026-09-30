@@ -191,7 +191,7 @@ class RedisManager:
     def set_ttl(self, key: str, ttl: int) -> bool:
         if not self.is_connected:
             return False
-        if ttl == -1:
+        if ttl == 0:
             return self._client.persist(key)
         return self._client.expire(key, ttl)
 

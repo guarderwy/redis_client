@@ -333,7 +333,6 @@ class MainWindow(QWidget):
         self.format_combo = QComboBox()
         self.format_combo.addItem("自动检测")
         self.format_combo.addItem("JSON")
-        self.format_combo.addItem("XML")
         self.format_combo.addItem("文本")
         self.format_combo.currentIndexChanged.connect(self.reformat_value)
         editor_buttons.addWidget(QLabel("格式:"))
@@ -358,8 +357,8 @@ class MainWindow(QWidget):
         self.ttl_editor_layout = QHBoxLayout()
         self.ttl_editor_layout.addWidget(QLabel("TTL (秒):"))
         self.ttl_spin = QSpinBox()
-        self.ttl_spin.setRange(-1, 999999999)
-        self.ttl_spin.setValue(-1)
+        self.ttl_spin.setRange(0, 999999999)
+        self.ttl_spin.setValue(0)
         self.ttl_spin.setSpecialValueText("永不过期")
         self.ttl_editor_layout.addWidget(self.ttl_spin)
 
@@ -1344,7 +1343,7 @@ class MainWindow(QWidget):
         if kv.ttl > 0:
             self.ttl_spin.setValue(kv.ttl)
         else:
-            self.ttl_spin.setValue(-1)
+            self.ttl_spin.setValue(0)
 
         formatted_value = DataFormatter.format_value(kv.value, kv.key_type)
         self.value_editor.setPlainText(formatted_value)
@@ -1552,11 +1551,23 @@ class MainWindow(QWidget):
     def reformat_value(self):
         current_text = self.value_editor.toPlainText()
         fmt = self.format_combo.currentText()
+        if not current_text.strip():
+            return
 
-        if fmt == "JSON":
-            self.value_editor.setPlainText(DataFormatter.format_json(current_text))
-        elif fmt == "XML":
-            self.value_editor.setPlainText(DataFormatter.format_xml(current_text))
+        if fmt == "自动检测":
+            detected = DataFormatter.detect_format(current_text)
+            if detected == "json":
+                self.value_editor.setPlainText(DataFormatter.format_json(current_text))
+            elif detected == "xml":
+                self.value_editor.setPlainText(DataFormatter.format_xml(current_text))
+            else:
+                QMessageBox.warning(self, "格式化", "无法格式化：内容不是有效的 JSON 或 XML。")
+        elif fmt == "JSON":
+            if DataFormatter.detect_format(current_text) == "json":
+                self.value_editor.setPlainText(DataFormatter.format_json(current_text))
+            else:
+                QMessageBox.warning(self, "格式化", "无法格式化：内容不是有效的 JSON。")
+        # 文本：保持原样
 
     def validate_value(self):
         current_text = self.value_editor.toPlainText()
@@ -1619,8 +1630,8 @@ class MainWindow(QWidget):
             return
         
         ttl = self.ttl_spin.value()
-        
-        if ttl == -1:
+
+        if ttl == 0:
             if self.redis_manager.set_ttl(key, ttl):
                 self.add_operation_log(f"PERSIST {key}")
                 self.refresh_selected_key()
