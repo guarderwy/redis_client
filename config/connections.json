@@ -2,7 +2,7 @@
   "connections": [
     {
       "id": "5b56f9e0-a554-40a7-8ef6-6a4c91f32e1b",
-      "name": "本地-0",
+      "name": "本地",
       "host": "localhost",
       "port": 6379,
       "password": "123456",
@@ -14,23 +14,23 @@
       "username": null,
       "separator": ":",
       "created_at": "2026-04-29T16:58:34.649692",
-      "updated_at": "2026-04-29T16:58:34.649698"
+      "updated_at": "2026-07-29T18:55:14.928354"
     },
     {
-      "id": "407d484b-4f12-47d7-9941-dd41098eefe0",
-      "name": "本地-1",
+      "id": "c7200e6b-683b-4958-9496-b8ad3773d186",
+      "name": "local",
       "host": "localhost",
       "port": 6379,
       "password": "123456",
-      "db": 1,
+      "db": 0,
       "ssl": false,
       "ssl_certfile": null,
       "ssl_keyfile": null,
       "ssl_ca_certs": null,
       "username": null,
       "separator": ":",
-      "created_at": "2026-04-29T16:58:48.885806",
-      "updated_at": "2026-04-29T16:59:55.577074"
+      "created_at": "2026-10-10T16:23:52.362390",
+      "updated_at": "2026-10-10T16:23:52.362397"
     }
   ],
   "version": "1.0"
