@@ -19,6 +19,7 @@ from src.utils.formatters import DataFormatter
 from src.utils.validators import DataValidator
 from src.ui.connection_dialog import ConnectionDialog
 from src.ui.new_key_dialog import NewKeyDialog
+from src.ui.monitor import MonitorWidget
 from src.services.backup_service import BackupService
 from src.services.import_export import ImportExportService
 
@@ -671,7 +672,32 @@ class MainWindow(QWidget):
         action_about.triggered.connect(self.show_about)
         help_menu.addAction(action_about)
 
+        monitor_menu = menubar.addMenu("监控(&M)")
+
+        action_open_monitor = QAction("服务器监控(&S)", self)
+        action_open_monitor.triggered.connect(self.open_monitor)
+        monitor_menu.addAction(action_open_monitor)
+
         return menubar
+
+    def open_monitor(self):
+        if not self.redis_manager.is_connected:
+            QMessageBox.warning(self, "警告", "未连接到 Redis 服务器")
+            return
+        if getattr(self, "_monitor_dialog", None) is not None and self._monitor_dialog.isVisible():
+            self._monitor_dialog.raise_()
+            self._monitor_dialog.activateWindow()
+            return
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle("服务器监控")
+        dialog.resize(700, 600)
+        layout = QVBoxLayout(dialog)
+        monitor = MonitorWidget(self.redis_manager)
+        layout.addWidget(monitor)
+        dialog.finished.connect(monitor.stop_monitoring)
+        self._monitor_dialog = dialog
+        dialog.show()
 
     def setup_shortcuts(self):
         QShortcut(QKeySequence("Ctrl+R"), self).activated.connect(self.refresh_keys)
